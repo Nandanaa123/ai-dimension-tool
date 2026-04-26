@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Dimension Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #38bdf8;
+            margin-bottom: 10px;
+        }
+
+        p.subtitle {
+            color: #94a3b8;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .upload-box {
+            border: 2px dashed #38bdf8;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+            max-width: 500px;
+            transition: background 0.3s;
+        }
+
+        .upload-box:hover {
+            background: #1e293b;
+        }
+
+        .upload-box input {
+            display: none;
+        }
+
+        .upload-box label {
+            cursor: pointer;
+            font-size: 1rem;
+            color: #94a3b8;
+        }
+
+        .upload-box img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 14px 40px;
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #0ea5e9;
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 40px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .results h2 {
+            font-size: 1.4rem;
+            color: #38bdf8;
+            margin-bottom: 16px;
+        }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #38bdf8;
+        }
+
+        .card h3 {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            color: #f1f5f9;
+            margin-bottom: 10px;
+        }
+
+        .card p {
+            color: #94a3b8;
+            margin: 4px 0;
+            font-size: 0.95rem;
+        }
+
+        .card span {
+            color: #38bdf8;
+            font-weight: bold;
+        }
+
+        .loading {
+            margin-top: 20px;
+            color: #38bdf8;
+            font-size: 1rem;
+            display: none;
+        }
+
+        .error {
+            margin-top: 20px;
+            color: #f87171;
+            font-size: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>📐 AI Dimension Tool</h1>
+    <p class="subtitle">Upload an image to detect objects and estimate their dimensions</p>
+
+    <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+        <label>Click to upload an image</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="previewImage(event)">
+        <img id="preview" src="" alt="" style="display:none">
+    </div>
+
+    <button id="measureBtn" onclick="measure()" disabled>Measure Dimensions</button>
+
+    <div class="loading" id="loading">⏳ Analyzing image...</div>
+    <div class="error" id="error"></div>
+
+    <div class="results" id="results"></div>
+
+    <script>
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const preview = document.getElementById('preview');
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+            document.querySelector('.upload-box label').style.display = 'none';
+            document.getElementById('measureBtn').disabled = false;
+        }
+
+        async function measure() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('measureBtn').disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/measure', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('measureBtn').disabled = false;
+
+                if (data.objects.length === 0) {
+                    document.getElementById('results').innerHTML = '<p style="color:#94a3b8">No objects detected. Try another image.</p>';
+                    return;
+                }
+
+                let html = '<h2>Detected Objects</h2>';
+                data.objects.forEach(obj => {
+                    html += `
+                        <div class="card">
+                            <h3>${obj.label}</h3>
+                            <p>Width: <span>${obj.estimated_width_cm} cm</span></p>
+                            <p>Height: <span>${obj.estimated_height_cm} cm</span></p>
+                            <p>Confidence: <span>${(obj.confidence * 100).toFixed(0)}%</span></p>
+                        </div>`;
+                });
+                document.getElementById('results').innerHTML = html;
+
+            } catch (e) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('measureBtn').disabled = false;
+                const err = document.getElementById('error');
+                err.style.display = 'block';
+                err.textContent = 'Error: Make sure the backend server is running!';
+            }
+        }
+    </script>
+</body>
+
+</html>
